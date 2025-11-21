@@ -1,0 +1,565 @@
+<!DOCTYPE html>
+<html lang="es">
+  <head>
+    <meta charset="UTF-8" />
+    <title>Apagado de HUMAN1 - Generalitat Valenciana</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <!-- Fuente digital estilo retro -->
+    <link
+      href="https://fonts.googleapis.com/css2?family=Share+Tech+Mono&display=swap"
+      rel="stylesheet"
+    />
+    <style>
+      body {
+        background: #212121;
+        color: #fff;
+        font-family: "Share Tech Mono", monospace;
+        min-height: 100vh;
+        margin: 0;
+        padding: 0;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+      }
+      header {
+        text-align: center;
+        margin: 2em 0 1em;
+      }
+      .gva-logo {
+        margin-bottom: 0.6em;
+      }
+      h1 {
+        color: #ff4037;
+        font-weight: bold;
+        margin-bottom: 0.2em;
+        letter-spacing: 2px;
+        text-shadow: 0 0 6px #401010, 0 0 22px #94000060;
+      }
+      .digital-panel {
+        background: #484848;
+        border: 7px ridge #757575;
+        border-radius: 10px;
+        padding: 30px 12px 18px 12px;
+        margin: 1.2em auto 0 auto;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        min-width: 340px;
+        max-width: 96vw;
+        box-shadow: 0 0 12px #222, 0 2px 36px #000c inset;
+        position: relative;
+      }
+      .label-row,
+      .value-row {
+        display: flex;
+        flex-direction: row;
+        justify-content: center;
+        gap: 14px;
+        margin: 0 0 2px 0;
+        font-size: 1.1em;
+        user-select: none;
+        letter-spacing: 1px;
+      }
+      .label-row > div {
+        display: flex;
+        justify-content: center;
+        align-items: center;
+        height: 40px;
+        width: 92px;
+        padding: 0;
+        color: #fff;
+        background: #1118;
+        border-radius: 4px 4px 0 0;
+        font-size: 0.98em;
+        letter-spacing: 1.2px;
+        font-weight: bold;
+      }
+      .value-row > div {
+        display: flex;
+        justify-content: center;
+        align-items: center;
+        width: 92px;
+        min-width: 62px;
+        text-align: center;
+        background: #191919;
+        padding: 18px 0 14px 0;
+        border-radius: 0 0 8px 8px;
+        margin-bottom: 1px;
+        font-family: "Share Tech Mono", monospace;
+        font-size: 3.5em;
+        box-shadow: 0 0 12px #000b inset;
+        border-bottom: 5px solid #222;
+        transition: font-size 0.2s;
+      }
+      .red {
+        color: #ff3030;
+        text-shadow: 0 0 10px #ff3930b6, 0 1px 3px #640b0b;
+      }
+      .green {
+        color: #70fd36;
+        text-shadow: 0 0 9px #97fa3db7, 0 1px 3px #274d1b;
+      }
+      .yellow {
+        color: #fee934;
+        text-shadow: 0 0 9px #fee934b5, 0 1px 4px #a0861f;
+      }
+      .switch-section {
+        align-items: center;
+        flex-direction: column;
+        margin: 2.5em 0 1.4em 0;
+        text-align: center;
+        display: flex;
+      }
+      .digital-switch {
+        appearance: none;
+        background: #111;
+        width: 130px;
+        height: 54px;
+        border-radius: 27px;
+        position: relative;
+        cursor: pointer;
+        outline: none;
+        border: 4px solid #333;
+        margin: 0 auto;
+        margin-bottom: 12px;
+        box-shadow: 0 0 7px #ff303045 inset;
+        transition: background 0.22s;
+      }
+      .digital-switch:before {
+        content: "";
+        position: absolute;
+        left: 7px;
+        top: 7px;
+        width: 40px;
+        height: 40px;
+        background: #ff4037;
+        border-radius: 50%;
+        box-shadow: 0 0 13px #ff403785, 0 1px 8px #48090960;
+        transition: left 0.25s, background 0.15s;
+      }
+      .digital-switch:checked {
+        background: #70fd36;
+        box-shadow: 0 0 10px #70fd3685 inset;
+      }
+      .digital-switch:checked:before {
+        left: 83px;
+        background: #70fd36;
+        box-shadow: 0 0 13px #70fd3685, 0 1px 8px #274d1b60;
+      }
+      .switch-label {
+        margin-top: -2px;
+        font-size: 1.5em;
+        letter-spacing: 2px;
+        font-weight: bold;
+        color: #ff4037;
+        text-shadow: 0 0 5px #afd;
+        text-align: center;
+        margin-bottom: 0.3em;
+      }
+      .digital-switch[disabled] {
+        opacity: 0.55;
+        cursor: not-allowed;
+      }
+      .apagada {
+        background: #000 !important;
+        color: #70fd36 !important;
+        transition: background 1.5s;
+      }
+      #apagado-espectacular {
+        position: fixed;
+        z-index: 9999;
+        inset: 0;
+        background: #000b;
+        display: flex;
+        justify-content: center;
+        align-items: center;
+        transition: background 0.35s;
+        animation: flash-bg 1.6s;
+      }
+      @keyframes flash-bg {
+        0% {
+          background: #fff;
+        }
+        9% {
+          background: #fff;
+        }
+        10% {
+          background: #b60303ee;
+        }
+        20% {
+          background: #000;
+        }
+        28% {
+          background: #222;
+        }
+        40% {
+          background: #a0910afe;
+        }
+        52% {
+          background: #1c1c1c;
+        }
+        60% {
+          background: #fffea0ee;
+        }
+        70% {
+          background: #000;
+        }
+        100% {
+          background: #000c;
+        }
+      }
+      .apagado-glitch {
+        position: absolute;
+        top: 50%;
+        left: 50%;
+        transform: translate(-50%, -50%);
+        color: #fff;
+        font-size: 9vw;
+        font-family: "Share Tech Mono", monospace;
+        letter-spacing: 3px;
+        text-align: center;
+        filter: drop-shadow(0 2px 20px #f22);
+        animation: glitchy 2s linear;
+        white-space: pre-line;
+        user-select: none;
+      }
+      .apagado-glitch span {
+        background: linear-gradient(
+          95deg,
+          #ff3030 30%,
+          #fee934 78%,
+          #70fd36 90%
+        );
+        -webkit-background-clip: text;
+        -webkit-text-fill-color: transparent;
+        animation: glitch-colors 1.6s alternate infinite;
+      }
+      @keyframes glitchy {
+        0% {
+          transform: translate(-50%, -50%) scale(0.94) skew(-1deg, 2deg);
+        }
+        15% {
+          transform: translate(-50%, -50%) scale(1.15) skew(4deg, -5deg);
+        }
+        45% {
+          transform: translate(-50%, -52%) scale(0.98) skew(-6deg, 2deg);
+        }
+        70% {
+          transform: translate(-50%, -50%) scale(1.03) skew(2deg, 0deg);
+        }
+        100% {
+          transform: translate(-50%, -50%) scale(1) skew(0);
+        }
+      }
+      @keyframes glitch-colors {
+        0% {
+          text-shadow: 2px 0 #fee934, -2px 0 #70fd36;
+        }
+        55% {
+          text-shadow: -5px -2px #ff3030, 4px 3px #fee934;
+        }
+        100% {
+          text-shadow: 6px 2px #ff3030, -6px -2px #70fd36;
+        }
+      }
+      @media (max-width: 540px) {
+        .label-row > div,
+        .value-row > div {
+          width: 38px;
+          font-size: 1.4em;
+        }
+        .value-row > div {
+          font-size: 2.1em;
+          padding: 9px 0 5px 0;
+        }
+        .digital-panel {
+          padding: 12px 2px 7px 2px;
+        }
+        .apagado-glitch {
+          font-size: 6vw;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <header>
+      <div class="gva-logo">
+        <svg width="52" height="52" viewBox="0 0 60 60" fill="none">
+          <circle
+            cx="30"
+            cy="30"
+            r="29"
+            fill="#fff"
+            stroke="#aa1818"
+            stroke-width="2"
+          />
+          <text
+            x="30"
+            y="37"
+            font-size="22"
+            text-anchor="middle"
+            font-family="Arial"
+            fill="#aa1818"
+            font-weight="bold"
+          >
+            GVA
+          </text>
+        </svg>
+      </div>
+      <h1>APAGADO DE HUMAN1</h1>
+      <p style="margin: 0 auto 1em; max-width: 530px; font-size: 1.13em">
+        HUMAN1, aplicación histórica de la GVA, dejará de funcionar en breve.
+        <br />
+        Aquí puedes ver la <b>cuenta atrás oficial</b> y proceder al apagado
+        definitivo digital cuando llegue el momento.
+      </p>
+    </header>
+    <div
+      class="digital-panel"
+      aria-label="Panel cuenta atrás digital estilo retro"
+    >
+      <div class="label-row">
+        <div>MESES</div>
+        <div>DÍAS</div>
+        <div>HORAS</div>
+        <div>MIN</div>
+        <div>SEG</div>
+      </div>
+      <div class="value-row" id="digital-count">
+        <div class="red">--</div>
+        <div class="yellow">--</div>
+        <div class="green">--</div>
+        <div class="yellow">--</div>
+        <div class="red">--</div>
+      </div>
+      <div
+        style="
+          color: #fee934;
+          font-size: 1.18em;
+          margin-top: 6px;
+          text-align: center;
+        "
+      >
+        Fecha objetivo: <span id="fecha-objetivo"></span>
+      </div>
+    </div>
+    <div class="switch-section" id="switch-section">
+      <div class="switch-label">APAGAR HUMAN1</div>
+      <input
+        type="checkbox"
+        class="digital-switch"
+        id="power-switch"
+        aria-label="Interruptor digital apagado"
+      />
+      <div
+        id="switch-msg"
+        style="
+          margin-top: 10px;
+          font-size: 1.17em;
+          min-height: 30px;
+          height: 30px;
+        "
+      ></div>
+    </div>
+    <div
+      id="apagado-mensaje"
+      style="
+        margin: 2.3em 0 1em;
+        font-size: 1.18em;
+        color: #70fd36;
+        text-align: center;
+      "
+    ></div>
+    <div id="apagado-espectacular" style="display: none">
+      <canvas id="apagado-canvas"></canvas>
+      <div class="apagado-glitch">
+        <span>HUMAN1<br />APAGADA</span>
+      </div>
+    </div>
+    <footer
+      style="
+        margin-top: auto;
+        font-size: 0.92em;
+        text-align: center;
+        color: #999;
+      "
+    >
+      Generalitat Valenciana &copy; 2025
+    </footer>
+    <audio id="tic-audio" preload="auto">
+      <source src="clock-42682.mp3" type="audio/mpeg" />
+    </audio>
+    <audio id="powerdown-audio" preload="auto">
+      <source src="big-cine-boom-sound-effect-245851.mp3" type="audio/mpeg" />
+    </audio>
+    <script>
+      // FECHA Y CONTRASEÑA A TU GUSTO
+      const shutdownDate = new Date("2029-07-01T11:00:00");
+      const switchPassword = "GVA2025";
+
+      const digitalCount = document.getElementById("digital-count");
+      const fechaObjElem = document.getElementById("fecha-objetivo");
+      const switchSection = document.getElementById("switch-section");
+      const powerSwitch = document.getElementById("power-switch");
+      const switchMsg = document.getElementById("switch-msg");
+      const apagadoMensaje = document.getElementById("apagado-mensaje");
+      const ticAudio = document.getElementById("tic-audio");
+      const powerdownAudio = document.getElementById("powerdown-audio");
+      let ticSonidoOK = false;
+
+      // Intenta activar audio al cargar; más volumen:
+      window.addEventListener("load", () => {
+        try {
+          ticAudio.volume = 0.6;
+          ticAudio.play().then(() => {
+            ticSonidoOK = true;
+          });
+        } catch (e) {
+          ticSonidoOK = false;
+        }
+      });
+
+      // Permite el sonido si el usuario interactúa
+      window.addEventListener("pointerdown", () => {
+        ticSonidoOK = true;
+      });
+
+      fechaObjElem.innerText = shutdownDate.toLocaleString("es-ES", {
+        year: "numeric",
+        month: "long",
+        day: "numeric",
+        hour: "2-digit",
+        minute: "2-digit",
+        second: "2-digit",
+      });
+      function getDigitalParts(toDate) {
+        const now = new Date();
+        let total = Math.floor((toDate - now) / 1000);
+        if (total <= 0) return [0, 0, 0, 0, 0];
+
+        const months = Math.floor(total / (30 * 24 * 3600)); // aproximación
+        total %= 30 * 24 * 3600;
+        const days = Math.floor(total / (24 * 3600));
+        total %= 24 * 3600;
+        const hours = Math.floor(total / 3600);
+        total %= 3600;
+        const minutes = Math.floor(total / 60);
+        const seconds = total % 60;
+
+        return [months, days, hours, minutes, seconds];
+      }
+      function pad2(val) {
+        return val.toString().padStart(2, "0");
+      }
+      const colorList = ["red", "yellow", "green", "yellow", "red"];
+      function updateDigital() {
+        let [meses, dias, horas, mins, segs] = getDigitalParts(shutdownDate);
+        let arr = [meses, dias, horas, mins, segs];
+        digitalCount.innerHTML = arr
+          .map((val, i) => `<div class="${colorList[i]}">${pad2(val)}</div>`)
+          .join("");
+        if (ticSonidoOK) {
+          ticAudio.currentTime = 0;
+          ticAudio.play();
+        }
+      }
+      updateDigital();
+      let timer = setInterval(updateDigital, 1000);
+      switchSection.style.display = "flex";
+      let switched = false;
+      powerSwitch.addEventListener("change", function () {
+        if (switched) return;
+        let now = new Date();
+        let diff = shutdownDate - now;
+        let margin = 24 * 60 * 60 * 1000;
+        if (diff > margin) {
+          switchMsg.innerHTML = `<span style="color:#fee934;">AÚN NO ESTÁS PREPARADO</span>`;
+          powerSwitch.checked = false;
+          setTimeout(() => {
+            switchMsg.innerHTML = "";
+          }, 2000);
+          return;
+        }
+        let pass = prompt("Introduce la contraseña para apagar HUMAN1:");
+        if (pass === switchPassword) {
+          setTimeout(triggerApagadoShow, 180);
+          document.body.classList.add("apagada");
+          powerSwitch.disabled = true;
+          switchMsg.innerHTML = `<span style="color:#70fd36;">Operación realizada correctamente.</span>`;
+          switched = true;
+        } else {
+          switchMsg.innerHTML = `<span style="color:#ff3030;">Contraseña incorrecta. Intenta de nuevo.</span>`;
+          powerSwitch.checked = false;
+          setTimeout(() => {
+            switchMsg.innerHTML = "";
+          }, 1800);
+        }
+      });
+      function triggerApagadoShow() {
+        document.getElementById("apagado-espectacular").style.display = "flex";
+        powerdownAudio.currentTime = 0;
+        powerdownAudio.play();
+        const canvas = document.getElementById("apagado-canvas");
+        const ctx = canvas.getContext("2d");
+        let W = window.innerWidth,
+          H = window.innerHeight;
+        canvas.width = W;
+        canvas.height = H;
+        let particulas = [];
+        let colors = ["#ff3030", "#fee934", "#70fd36", "#fff", "#d8ffc4"];
+        for (let i = 0; i < 77; i++) {
+          particulas.push({
+            x: W / 2 + Math.random() * 150 - 75,
+            y: H / 2 + Math.random() * 32 - 16,
+            vx: (Math.random() - 0.5) * 8,
+            vy: Math.random() * -8 - 3,
+            r: Math.random() * 8 + 5,
+            c: colors[Math.floor(Math.random() * colors.length)],
+            g: 0.32 + Math.random() * 0.23,
+          });
+        }
+        let frames = 0,
+          stop = false;
+        function animateParticles() {
+          if (stop) return;
+          ctx.clearRect(0, 0, W, H);
+          for (let p of particulas) {
+            ctx.beginPath();
+            ctx.arc(p.x, p.y, p.r, 0, Math.PI * 2);
+            ctx.fillStyle = p.c;
+            ctx.globalAlpha = 0.85 - Math.abs(p.vy) / 30;
+            ctx.shadowColor = p.c;
+            ctx.shadowBlur = 14;
+            ctx.fill();
+            ctx.globalAlpha = 1;
+            ctx.shadowBlur = 0;
+            p.x += p.vx;
+            p.y += p.vy;
+            p.vy += p.g;
+            if (p.y > H + 20) {
+              p.x = W / 2;
+              p.y = H / 2;
+              p.vx = (Math.random() - 0.5) * 8;
+              p.vy = Math.random() * -8 - 3;
+            }
+          }
+          frames++;
+          if (frames < 120) requestAnimationFrame(animateParticles);
+          else stop = true;
+        }
+        animateParticles();
+        setTimeout(() => {
+          document.querySelector(".apagado-glitch span").innerText =
+            "HUMAN1\nAPAGADA\n🚀";
+        }, 1200);
+        setTimeout(() => {
+          document.getElementById("apagado-espectacular").style.display =
+            "none";
+          apagadoMensaje.innerHTML = `&#9889; <b>HUMAN1 ha sido apagada<br>de manera espectacular.</b><br>La nueva aplicación está ahora activa.<br><i>(${new Date().toLocaleString(
+            "es-ES"
+          )})</i>`;
+        }, 3200);
+      }
+    </script>
+  </body>
+</html>
