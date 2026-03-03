@@ -3,296 +3,320 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>PSO Master - Simulador de Infraestructuras</title>
-    <!-- Tailwind CSS para el diseño -->
+    <title>PSO Master - Optimización de Infraestructuras</title>
+    <!-- Tailwind CSS -->
     <script src="https://cdn.tailwindcss.com"></script>
-    <!-- React y Babel para ejecutar JSX en el navegador -->
+    <!-- React y Babel -->
     <script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
     <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
     <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
-    <!-- Lucide Icons Library -->
+    <!-- Lucide Icons -->
     <script src="https://unpkg.com/lucide@latest"></script>
     <style>
-        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;700;900&family=JetBrains+Mono:wght@700&display=swap');
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;700;900&family=JetBrains+Mono:wght@800&display=swap');
         body { font-family: 'Inter', sans-serif; overflow-x: hidden; }
-        .font-mono { font-family: 'JetBrains+Mono', monospace; font-weight: 700; }
+        .font-mono { font-family: 'JetBrains+Mono', monospace; font-weight: 800; }
         input[type=range] { cursor: pointer; }
-        .transition-all { transition: all 0.5s ease; }
-        /* Estilos para forzar la negrita y legibilidad en la telemetría */
-        .table-bold td, .table-bold th { font-weight: 800 !important; }
+        .table-bold td, .table-bold th { font-weight: 900 !important; }
+        
         .bg-grid {
-            background-size: 25px 25px;
+            background-size: 40px 40px;
             background-image: radial-gradient(circle, currentColor 1px, transparent 1px);
+        }
+
+        /* Animación de rotación con variable CSS para control de velocidad */
+        @keyframes rotate-blades {
+            from { transform: rotate(0deg); }
+            to { transform: rotate(360deg); }
+        }
+        .blades-anim {
+            transform-origin: center;
+            animation: rotate-blades linear infinite;
+            animation-duration: var(--blade-speed, 0s);
         }
     </style>
 </head>
-<body class="bg-slate-50 transition-colors duration-500" id="body-bg">
+<body class="bg-slate-50 transition-colors duration-500">
     <div id="root"></div>
 
     <script type="text/babel">
         const { useState, useEffect, useCallback } = React;
 
-        // Componente de Icono compatible con Lucide en modo Standalone
+        // Turbina SVG con control de velocidad calibrado
+        const TurbineSVG = ({ x, y, efficiency, iteration, presentationMode }) => {
+            const speedFactor = Math.pow(efficiency, 2); 
+            const duration = iteration === 0 ? '0s' : `${(3 / (speedFactor * 15 + 0.1)).toFixed(3)}s`;
+            const glowColor = presentationMode ? 'rgba(52, 211, 153, 0.5)' : 'rgba(16, 185, 129, 0.3)';
+
+            return (
+                <div className="absolute flex flex-col items-center" style={{ left: x, top: y, transform: 'translate(-50%, -85%)', zIndex: 10 }}>
+                    <svg width="70" height="70" viewBox="0 0 100 100" style={{ overflow: 'visible' }}>
+                        <g className="blades-anim" style={{ 
+                            '--blade-speed': duration,
+                            animationPlayState: iteration === 0 || efficiency < 0.01 ? 'paused' : 'running'
+                        }}>
+                            <circle cx="50" cy="50" r="4" fill="#475569" />
+                            <path d="M50 50 L50 5 Q55 5 50 50" fill="currentColor" className="text-slate-400" />
+                            <path d="M50 50 L89 72 Q91 67 50 50" fill="currentColor" className="text-slate-400" />
+                            <path d="M50 50 L11 72 Q9 67 50 50" fill="currentColor" className="text-slate-400" />
+                        </g>
+                    </svg>
+                    <div className="w-1.5 h-24 bg-gradient-to-b from-slate-400 to-slate-600 rounded-full -mt-10"></div>
+                    <div className="absolute bottom-0 w-20 h-6 rounded-[100%] blur-lg transition-opacity duration-500" 
+                         style={{ backgroundColor: glowColor, opacity: efficiency }}></div>
+                </div>
+            );
+        };
+
         const Icon = ({ name, size = 18, className = "" }) => {
             return <i data-lucide={name} style={{ width: size, height: size }} className={className}></i>;
         };
 
         const App = () => {
-            const MAP_SIZE = 550; // Mapa grande para el layout 50/50
-            const TARGET = { x: 450, y: 100 };
-            const NUM_DRONES = 8;
+            const MAP_SIZE = 550;
+            // CAMBIO: Ahora 'drones' es el valor por defecto
+            const [scenario, setScenario] = useState('drones'); 
+            
+            const TARGETS = {
+                drones: { x: 450, y: 100, icon: 'flame', color: 'text-orange-500' },
+                wind: { x: 275, y: 275, icon: 'wind', color: 'text-emerald-400' }
+            };
 
-            const [w, setW] = useState(0.5);   
-            const [c1, setC1] = useState(1.5); 
-            const [c2, setC2] = useState(1.5); 
+            const FIXED_TURBINES = [
+                { x: 100, y: 100 }, { x: 275, y: 100 }, { x: 450, y: 100 },
+                { x: 100, y: 275 }, { x: 450, y: 275 },
+                { x: 100, y: 450 }, { x: 275, y: 450 }, { x: 450, y: 450 }
+            ];
+
+            const [w, setW] = useState(0.4);   
+            const [c1, setC1] = useState(1.6); 
+            const [c2, setC2] = useState(1.4); 
 
             const [iteration, setIteration] = useState(0);
-            const [drones, setDrones] = useState([]);
+            const [particles, setParticles] = useState([]);
             const [gBest, setGBest] = useState({ x: 0, y: 0, fitness: Infinity });
-            const [status, setStatus] = useState("Sistemas listos.");
-            const [presentationMode, setPresentationMode] = useState(false);
+            const [presentationMode, setPresentationMode] = useState(true);
 
-            // Actualizar iconos de Lucide en cada renderizado
             useEffect(() => {
-                if (window.lucide) {
-                    window.lucide.createIcons();
-                }
+                if (window.lucide) window.lucide.createIcons();
             });
 
-            // Función para calcular la proyección del siguiente movimiento
-            const calculateProjection = useCallback((d, currentGBest) => {
-                const r1 = 0.5; // Valor estático para previsualización suave
-                const r2 = 0.5;
-                const vInertiaX = w * d.vx;
-                const vInertiaY = w * d.vy;
-                const vCogX = c1 * r1 * (d.pBestX - d.x);
-                const vCogY = c1 * r1 * (d.pBestY - d.y);
-                const vSocX = c2 * r2 * (currentGBest.x - d.x);
-                const vSocY = c2 * r2 * (currentGBest.y - d.y);
+            const calculateProjection = useCallback((p, currentGBest) => {
+                const r1 = 0.5; const r2 = 0.5;
+                const target = TARGETS[scenario];
+                const nVx = w * p.vx + c1 * r1 * (p.pBestX - p.x) + c2 * r2 * (currentGBest.x - p.x);
+                const nVy = w * p.vy + c1 * r1 * (p.pBestY - p.y) + c2 * r2 * (currentGBest.y - p.y);
+                let nX = Math.max(0, Math.min(MAP_SIZE, p.x + nVx));
+                let nY = Math.max(0, Math.min(MAP_SIZE, p.y + nVy));
+                
+                const magI = Math.sqrt((w * p.vx) ** 2 + (w * p.vy) ** 2);
+                const magC = Math.sqrt((c1 * r1 * (p.pBestX - p.x)) ** 2 + (c1 * r1 * (p.pBestY - p.y)) ** 2);
+                const magS = Math.sqrt((c2 * r2 * (currentGBest.x - p.x)) ** 2 + (c2 * r2 * (currentGBest.y - p.y)) ** 2);
+                
+                let reason = "Social";
+                if (magI > magC && magI > magS) reason = "Inercia";
+                else if (magC > magI && magC > magS) reason = "Memoria";
 
-                const nVx = vInertiaX + vCogX + vSocX;
-                const nVy = vInertiaY + vCogY + vSocY;
-
-                const magInertia = Math.sqrt(vInertiaX**2 + vInertiaY**2);
-                const magCog = Math.sqrt(vCogX**2 + vCogY**2);
-                const magSoc = Math.sqrt(vSocX**2 + vSocY**2);
-
-                let reason = "Equil.";
-                if (magInertia > magCog && magInertia > magSoc) reason = "Inercia";
-                else if (magCog > magInertia && magCog > magSoc) reason = "Memoria";
-                else if (magSoc > magInertia && magSoc > magCog) reason = "Social";
-
-                let nX = Math.max(0, Math.min(MAP_SIZE, d.x + nVx));
-                let nY = Math.max(0, Math.min(MAP_SIZE, d.y + nVy));
                 return { nX, nY, nVx, nVy, reason };
-            }, [w, c1, c2, MAP_SIZE]);
+            }, [w, c1, c2, MAP_SIZE, scenario]);
 
             const initMission = useCallback(() => {
-                const newDrones = Array.from({ length: NUM_DRONES }, (_, i) => {
+                const target = TARGETS[scenario];
+                const newParticles = Array.from({ length: 8 }, (_, i) => {
                     const x = Math.random() * MAP_SIZE;
                     const y = Math.random() * MAP_SIZE;
                     const vx = (Math.random() - 0.5) * 15;
                     const vy = (Math.random() - 0.5) * 15;
-                    const fitness = Math.sqrt(Math.pow(x - TARGET.x, 2) + Math.pow(y - TARGET.y, 2));
+                    const fitness = Math.sqrt(Math.pow(x - target.x, 2) + Math.pow(y - target.y, 2));
                     return {
                         id: i, x, y, vx, vy, pBestX: x, pBestY: y, pBestFitness: fitness,
-                        color: `hsl(${(i * 360) / NUM_DRONES}, 85%, 50%)`,
+                        color: `hsl(${(i * 360) / 8}, 85%, 50%)`,
                         nextX: x, nextY: y, reason: "Explor."
                     };
                 });
-                let best = { ...newDrones[0], fitness: newDrones[0].pBestFitness };
-                newDrones.forEach(d => { if (d.pBestFitness < best.fitness) best = { x: d.x, y: d.y, fitness: d.pBestFitness }; });
-                
-                const withProj = newDrones.map(d => {
-                    const proj = calculateProjection(d, best);
-                    return { ...d, nextX: proj.nX, nextY: proj.nY, reason: proj.reason };
-                });
-                
-                setDrones(withProj);
+                let best = { x: newParticles[0].x, y: newParticles[0].y, fitness: newParticles[0].pBestFitness };
+                newParticles.forEach(p => { if (p.pBestFitness < best.fitness) best = { x: p.x, y: p.y, fitness: p.pBestFitness }; });
+                setParticles(newParticles.map(p => ({ ...p, ...calculateProjection(p, best) })));
                 setGBest(best);
                 setIteration(0);
-                setStatus("Drones en posición.");
-            }, [calculateProjection, MAP_SIZE, TARGET.x, TARGET.y]);
+            }, [calculateProjection, MAP_SIZE, scenario]);
 
-            useEffect(() => { initMission(); }, []);
+            useEffect(() => { initMission(); }, [initMission, scenario]);
 
             const runStep = () => {
-                setDrones(prev => {
-                    const nextDrones = prev.map(d => {
-                        const r1 = Math.random();
-                        const r2 = Math.random();
-                        const vX = w * d.vx + c1 * r1 * (d.pBestX - d.x) + c2 * r2 * (gBest.x - d.x);
-                        const vY = w * d.vy + c1 * r1 * (d.pBestY - d.y) + c2 * r2 * (gBest.y - d.y);
-                        const nextX = Math.max(0, Math.min(MAP_SIZE, d.x + vX));
-                        const nextY = Math.max(0, Math.min(MAP_SIZE, d.y + vY));
-                        const fitness = Math.sqrt(Math.pow(nextX - TARGET.x, 2) + Math.pow(nextY - TARGET.y, 2));
-                        const isNewPBest = fitness < d.pBestFitness;
-                        return {
-                            ...d, x: nextX, y: nextY, vx: vX, vy: vY,
-                            pBestX: isNewPBest ? nextX : d.pBestX,
-                            pBestY: isNewPBest ? nextY : d.pBestY,
-                            pBestFitness: isNewPBest ? fitness : d.pBestFitness
-                        };
+                const target = TARGETS[scenario];
+                setParticles(prev => {
+                    const nextP = prev.map(p => {
+                        const r1 = Math.random(); const r2 = Math.random();
+                        const vX = w * p.vx + c1 * r1 * (p.pBestX - p.x) + c2 * r2 * (gBest.x - p.x);
+                        const vY = w * p.vy + c1 * r1 * (p.pBestY - p.y) + c2 * r2 * (gBest.y - p.y);
+                        const nX = Math.max(0, Math.min(MAP_SIZE, p.x + vX));
+                        const nY = Math.max(0, Math.min(MAP_SIZE, p.y + vY));
+                        const fitness = Math.sqrt(Math.pow(nX - target.x, 2) + Math.pow(nY - target.y, 2));
+                        const isNew = fitness < p.pBestFitness;
+                        return { ...p, x: nX, y: nY, vx: vX, vy: vY, pBestX: isNew ? nX : p.pBestX, pBestY: isNew ? nY : p.pBestY, pBestFitness: isNew ? fitness : p.pBestFitness };
                     });
                     let best = { ...gBest };
-                    nextDrones.forEach(d => { if (d.pBestFitness < best.fitness) best = { x: d.pBestX, y: d.pBestY, fitness: d.pBestFitness }; });
+                    nextP.forEach(p => { if (p.pBestFitness < best.fitness) best = { x: p.pBestX, y: p.pBestY, fitness: p.pBestFitness }; });
                     setGBest(best);
                     setIteration(i => i + 1);
-                    setStatus(best.fitness < 20 ? "Localizado." : "Calculando...");
-                    return nextDrones.map(d => {
-                        const proj = calculateProjection(d, best);
-                        return { ...d, nextX: proj.nX, nextY: proj.nY, reason: proj.reason };
+                    return nextP.map(p => {
+                        const proj = calculateProjection(p, best);
+                        return { ...p, nextX: proj.nX, nextY: proj.nY, reason: proj.reason };
                     });
                 });
             };
 
+            const efficiency = Math.max(0, 1 - (gBest.fitness / 400));
+
             return (
-                <div className={`min-h-screen ${presentationMode ? 'bg-slate-950 text-white' : 'bg-slate-50 text-slate-800'} p-4 md:p-6 transition-all`}>
-                    <div className="max-w-[1700px] mx-auto">
+                <div className={`min-h-screen ${presentationMode ? 'bg-slate-950 text-white' : 'bg-slate-50 text-slate-800'} p-4 md:p-6 transition-all duration-700`}>
+                    <div className="max-w-[1750px] mx-auto">
                         
-                        {/* Cabecera */}
                         <div className={`flex flex-col md:flex-row justify-between items-center mb-8 border-b pb-4 ${presentationMode ? 'border-white/10' : 'border-slate-200'}`}>
                             <div>
-                                <h1 className="text-4xl font-black flex items-center gap-3">
-                                    <Icon name="navigation" size={32} className="text-blue-600" />
-                                    <span className={presentationMode ? "text-white" : "text-slate-900"}><span className="text-blue-600">PSO</span> Master AI</span>
+                                <h1 className="text-4xl font-black flex items-center gap-3 text-emerald-400">
+                                    <Icon name="zap" size={32} />
+                                    <span>PSO <span className="text-white uppercase">Infra-Smart</span></span>
                                 </h1>
-                                <p className="opacity-70 text-xs font-black uppercase tracking-[0.2em] mt-1 text-blue-500">Master Gestión de Infraestructuras</p>
+                                <div className="flex gap-2 mt-3">
+                                    <button onClick={() => setScenario('drones')} className={`text-[10px] font-black px-4 py-1.5 rounded-full border transition-all ${scenario === 'drones' ? 'bg-orange-600 text-white border-orange-600 shadow-lg' : 'border-slate-600 text-slate-500 hover:text-white'}`}>MODO DRONES</button>
+                                    <button onClick={() => setScenario('wind')} className={`text-[10px] font-black px-4 py-1.5 rounded-full border transition-all ${scenario === 'wind' ? 'bg-emerald-600 text-white border-emerald-600 shadow-lg' : 'border-slate-600 text-slate-500 hover:text-white'}`}>MODO PARQUE EÓLICO</button>
+                                </div>
                             </div>
-                            <div className="flex gap-4 items-center mt-4 md:mt-0">
-                                <button onClick={() => setPresentationMode(!presentationMode)} className={`px-5 py-2.5 rounded-xl text-xs font-black transition flex items-center gap-2 ${presentationMode ? 'bg-white/10 text-white' : 'bg-slate-200 text-slate-700'}`}>
-                                    <Icon name={presentationMode ? "sun" : "moon"} size={16} />
-                                    {presentationMode ? 'MODO LUZ' : 'MODO NOCHE'}
+                            <div className="flex gap-4 items-center">
+                                <button onClick={() => setPresentationMode(!presentationMode)} className="px-6 py-2.5 bg-slate-800 text-white rounded-xl text-xs font-black border border-white/20">
+                                    VISIÓN {presentationMode ? 'DIURNA' : 'NOCTURNA'}
                                 </button>
-                                <button onClick={initMission} className={`p-3 rounded-xl transition ${presentationMode ? 'bg-white/5 border border-white/10 text-white' : 'bg-white border border-slate-200 text-slate-600'}`}>
-                                    <Icon name="refresh-cw" size={20} />
-                                </button>
-                                <button onClick={runStep} className="bg-blue-600 text-white px-10 py-3.5 rounded-xl font-black shadow-2xl hover:scale-105 active:scale-95 transition flex items-center gap-3 text-base">
-                                    EJECUTAR PASO ({iteration})
-                                    <Icon name="chevron-right" size={22} />
+                                <button onClick={initMission} className="p-3 bg-white/5 border border-white/10 rounded-xl text-emerald-400 hover:scale-110 transition"><Icon name="refresh-cw" size={22}/></button>
+                                <button onClick={runStep} className="bg-emerald-600 text-white px-14 py-4 rounded-2xl font-black shadow-[0_0_30px_rgba(16,185,129,0.5)] hover:scale-105 active:scale-95 transition flex items-center gap-3 text-xl tracking-tighter text-center">
+                                    SIGUIENTE PASO ({iteration}) <Icon name="play" size={24} />
                                 </button>
                             </div>
                         </div>
 
-                        {/* Layout 50/50 Optimizado */}
                         <div className="grid grid-cols-1 lg:grid-cols-2 gap-10 items-stretch">
-                            
-                            {/* COLUMNA IZQUIERDA: GRÁFICOS */}
-                            <div className={`${presentationMode ? 'bg-slate-900 border-white/10' : 'bg-white border-slate-200'} p-8 rounded-[2.5rem] border shadow-2xl flex flex-col items-center justify-center transition-all min-h-[700px]`}>
+                            <div className={`${presentationMode ? 'bg-slate-900 border-white/10' : 'bg-white border-slate-200'} p-10 rounded-[3.5rem] border shadow-2xl flex flex-col items-center justify-center min-h-[720px] relative overflow-hidden transition-all duration-700`}>
                                 <div className="relative" style={{ width: MAP_SIZE, height: MAP_SIZE }}>
-                                    <div className={`absolute inset-0 rounded-3xl bg-grid ${presentationMode ? 'bg-slate-950 text-white/5' : 'bg-slate-50 text-slate-200'}`}></div>
+                                    <div className={`absolute inset-0 rounded-3xl bg-grid ${presentationMode ? 'text-white/5' : 'text-slate-200'}`}></div>
                                     
-                                    {/* Punto Objetivo (Invisible al inicio, rastro térmico) */}
-                                    <div className="absolute w-20 h-20 bg-orange-500/10 rounded-full animate-ping" style={{ left: TARGET.x-40, top: TARGET.y-40 }}></div>
-                                    <div className="absolute text-orange-500" style={{ left: TARGET.x-20, top: TARGET.y-20 }}><Icon name="flame" size={40} /></div>
+                                    {scenario === 'wind' && FIXED_TURBINES.map((t, i) => (
+                                        <TurbineSVG 
+                                            key={`t-${i}`} 
+                                            x={t.x} y={t.y} 
+                                            efficiency={efficiency} 
+                                            iteration={iteration}
+                                            presentationMode={presentationMode}
+                                        />
+                                    ))}
+
+                                    <div className={`absolute ${TARGETS[scenario].color} opacity-10 animate-pulse`} style={{ left: TARGETS[scenario].x-20, top: TARGETS[scenario].y-20 }}><Icon name={TARGETS[scenario].icon} size={40} /></div>
                                     
-                                    <svg className="absolute inset-0 w-full h-full pointer-events-none overflow-visible">
-                                        {drones.map(d => (
-                                            <React.Fragment key={d.id}>
-                                                <line x1={d.x} y1={d.y} x2={gBest.x} y2={gBest.y} stroke={presentationMode ? "rgba(255,255,255,0.08)" : "rgba(0,0,0,0.04)"} strokeWidth="2" />
-                                                <line x1={d.x} y1={d.y} x2={d.nextX} y2={d.nextY} stroke={presentationMode ? "rgba(255,255,255,0.4)" : "rgba(50,50,50,0.4)"} strokeWidth="3" strokeDasharray="8" />
+                                    <svg className="absolute inset-0 w-full h-full pointer-events-none">
+                                        {particles.map(p => (
+                                            <React.Fragment key={p.id}>
+                                                <line x1={p.x} y1={p.y} x2={gBest.x} y2={gBest.y} stroke={presentationMode ? "rgba(16,185,129,0.1)" : "rgba(0,0,0,0.05)"} strokeWidth="1" />
                                             </React.Fragment>
                                         ))}
                                     </svg>
 
-                                    {/* Drones */}
-                                    {drones.map(d => (
-                                        <div key={d.id} className="absolute w-8 h-8 rounded-full border-[3px] border-white shadow-2xl flex items-center justify-center transition-all duration-500"
-                                            style={{ left: d.x, top: d.y, backgroundColor: d.color, transform: 'translate(-50%, -50%)', zIndex: 10 }}>
-                                            <span className="text-[11px] font-black text-white">{d.id}</span>
+                                    {particles.map(p => (
+                                        <div key={p.id} className="absolute rounded-full border border-white shadow-sm transition-all duration-700"
+                                            style={{ 
+                                                left: p.x, top: p.y, 
+                                                backgroundColor: p.color, 
+                                                transform: 'translate(-50%, -50%)', 
+                                                zIndex: 30,
+                                                width: scenario === 'wind' ? '12px' : '36px',
+                                                height: scenario === 'wind' ? '12px' : '36px',
+                                                opacity: scenario === 'wind' ? 0.7 : 1,
+                                                display: 'flex', alignItems: 'center', justifyContent: 'center'
+                                            }}>
+                                            {scenario === 'drones' && <span className="text-[11px] font-black text-white">{p.id}</span>}
                                         </div>
                                     ))}
                                     
-                                    {/* Global Best Marker */}
-                                    <div className="absolute w-14 h-14 border-[5px] border-emerald-500/40 rounded-full flex items-center justify-center animate-pulse" style={{ left: gBest.x-28, top: gBest.y-28 }}>
-                                        <Icon name="target" size={28} className="text-emerald-500" />
+                                    <div className="absolute w-20 h-20 border-[6px] border-emerald-500/20 rounded-full flex items-center justify-center animate-pulse" style={{ left: gBest.x-40, top: gBest.y-40 }}>
+                                        <div className="text-[9px] font-black text-emerald-400 bg-slate-900/90 px-2 py-1 rounded border border-emerald-500/30 uppercase tracking-tighter shadow-lg">G-BEST</div>
                                     </div>
                                 </div>
                                 
-                                <div className="mt-12 flex items-center gap-10">
-                                    <div className="text-center">
-                                        <div className="text-[10px] font-black uppercase tracking-widest text-slate-400 mb-1">Mejor Fitness</div>
-                                        <div className="text-3xl font-black text-blue-500 font-mono">{gBest.fitness.toFixed(4)}</div>
+                                <div className="mt-12 flex items-center gap-12 w-full justify-around bg-slate-900/40 p-8 rounded-[2.5rem] border border-white/5 shadow-inner text-center">
+                                    <div className="flex flex-col items-center">
+                                        <div className="text-[11px] font-black uppercase text-slate-500 mb-2 tracking-[0.2em]">{scenario === 'wind' ? 'Eficiencia Red' : 'Localización'}</div>
+                                        <div className="text-8xl font-black text-emerald-400 font-mono">{(efficiency * 100).toFixed(1)}%</div>
                                     </div>
-                                    <div className={`px-6 py-3 rounded-2xl border font-black text-sm ${presentationMode ? 'bg-white/5 border-white/10' : 'bg-slate-100 border-slate-200'}`}>
-                                        <Icon name="info" size={14} className="inline mr-2" /> {status.toUpperCase()}
+                                    <div className="flex flex-col items-center">
+                                        <div className="text-[11px] font-black uppercase text-slate-500 mb-2 tracking-[0.2em]">{scenario === 'wind' ? 'Potencia' : 'Precisión'}</div>
+                                        <div className="text-8xl font-black text-blue-400 font-mono">{(efficiency * 14.2).toFixed(2)} <small className="text-2xl">{scenario === 'wind' ? 'MW' : 'pts'}</small></div>
                                     </div>
                                 </div>
                             </div>
 
-                            {/* COLUMNA DERECHA: DATOS */}
                             <div className="flex flex-col gap-6">
-                                
-                                {/* HIPERPARÁMETROS */}
-                                <div className={`p-8 rounded-[2.5rem] shadow-xl border ${presentationMode ? 'bg-slate-800 border-white/10 text-white' : 'bg-white border-slate-200 text-slate-800'}`}>
-                                    <h2 className="text-[16px] font-black uppercase tracking-tighter text-slate-400 mb-6 flex items-center gap-3">
-                                        <Icon name="settings-2" size={20} /> Ajuste de Hiperparámetros
+                                <div className={`p-8 rounded-[3.5rem] shadow-xl border ${presentationMode ? 'bg-slate-800 border-white/10 text-white' : 'bg-white border-slate-200 text-slate-800'}`}>
+                                    <h2 className="text-[22px] font-black uppercase tracking-tighter text-slate-400 mb-6 flex items-center gap-3">
+                                        <Icon name="sliders" size={26} /> Configuración PSO
                                     </h2>
-                                    <div className="grid grid-cols-1 gap-4">
+                                    <div className="grid grid-cols-1 gap-3">
                                         {[
-                                            { id: 'w', val: w, set: setW, label: 'Inercia (w)', color: 'blue', icon: "wind", desc: 'Mantiene dirección previa.' },
-                                            { id: 'c1', val: c1, set: setC1, label: 'Cognitivo (c1)', color: 'emerald', icon: "brain", desc: 'Atracción a récord propio.' },
-                                            { id: 'c2', val: c2, set: setC2, label: 'Social (c2)', color: 'purple', icon: "users", desc: 'Atracción al líder grupal.' }
+                                            { id: 'w', val: w, set: setW, label: 'Inercia (w)', color: 'blue', desc: 'Control de exploración inicial.' },
+                                            { id: 'c1', val: c1, set: setC1, label: 'Cognitivo (c1)', color: 'emerald', desc: 'Confianza en memoria individual.' },
+                                            { id: 'c2', val: c2, set: setC2, label: 'Social (c2)', color: 'purple', desc: 'Atracción al líder grupal.' }
                                         ].map(p => (
-                                            <div key={p.id} className="bg-slate-50 dark:bg-slate-900/40 p-4 rounded-2xl border dark:border-white/5">
-                                                <div className="flex justify-between font-black text-lg mb-2 uppercase">
-                                                    <span className="flex items-center gap-3"><Icon name={p.icon} size={20} className={`text-${p.color}-500`} /> {p.label}</span>
-                                                    <span className={`text-${p.color}-500 font-mono text-3xl`}>{p.val.toFixed(2)}</span>
+                                            <div key={p.id} className="bg-slate-50 dark:bg-slate-950/50 p-6 rounded-[2rem] border dark:border-white/5">
+                                                <div className="flex justify-between font-black text-2xl mb-1 uppercase tracking-tighter">
+                                                    <span>{p.label}</span>
+                                                    <span className={`text-${p.color}-500 font-mono text-7xl leading-none`}>{p.val.toFixed(2)}</span>
                                                 </div>
-                                                <input type="range" min="0" max="2" step="0.1" value={p.val} onChange={(e) => p.set(parseFloat(e.target.value))} className="w-full h-3 bg-slate-200 dark:bg-slate-700 rounded-lg appearance-none cursor-pointer accent-blue-600"/>
-                                                <p className="text-xs opacity-60 mt-2 font-bold italic">{p.desc}</p>
+                                                <input type="range" min="0" max="2" step="0.1" value={p.val} onChange={(e) => p.set(parseFloat(e.target.value))} className="w-full h-8 bg-slate-200 dark:bg-slate-700 rounded-xl appearance-none cursor-pointer accent-emerald-500 mb-2"/>
+                                                <p className="text-sm opacity-60 font-bold italic tracking-tight">{p.desc}</p>
                                             </div>
                                         ))}
                                     </div>
                                 </div>
 
-                                {/* TELEMETRÍA */}
-                                <div className={`${presentationMode ? 'bg-slate-800 border-white/10' : 'bg-white border-slate-200'} rounded-[2.5rem] border shadow-xl overflow-hidden flex-1`}>
-                                    <div className="bg-slate-100 dark:bg-slate-900/50 px-8 py-4 border-b dark:border-white/10 flex justify-between items-center">
-                                        <h3 className="text-sm font-black uppercase tracking-widest flex items-center gap-3">
-                                            <Icon name="table" size={20} className="text-blue-500" /> Telemetría Predictiva
+                                <div className={`${presentationMode ? 'bg-slate-800 border-white/10' : 'bg-white border-slate-200'} rounded-[3.5rem] border shadow-xl overflow-hidden flex-1 transition-all`}>
+                                    <div className="bg-slate-100 dark:bg-slate-900 px-10 py-6 border-b dark:border-white/10 flex justify-between items-center">
+                                        <h3 className="text-sm font-black uppercase tracking-widest flex items-center gap-3 text-blue-400">
+                                            <Icon name="cpu" size={24} /> Telemetría Sondas IA
                                         </h3>
-                                        <span className="text-[10px] font-black opacity-40">DATOS EN TIEMPO REAL</span>
+                                        <span className="text-xs font-black opacity-30 uppercase tracking-[0.2em]">Paso: {iteration}</span>
                                     </div>
                                     <div className="overflow-x-auto">
-                                        <table className="w-full text-left text-[12px] font-mono leading-none border-collapse table-bold">
-                                            <thead className={`${presentationMode ? 'text-slate-500' : 'text-slate-400'} uppercase border-b ${presentationMode ? 'border-white/5' : 'border-slate-100'}`}>
+                                        <table className="w-full text-left text-[18px] font-mono border-collapse table-bold">
+                                            <thead className={`${presentationMode ? 'text-slate-500' : 'text-slate-400'} uppercase border-b ${presentationMode ? 'border-white/10' : 'border-slate-100'}`}>
                                                 <tr>
-                                                    <th className="px-6 py-4">ID</th>
-                                                    <th className="px-6 py-4">Lógica</th>
-                                                    <th className="px-6 py-4">pBest</th>
-                                                    <th className="px-6 py-4 bg-blue-50/50 dark:bg-blue-900/20 text-blue-600">Próx. Punto</th>
-                                                    <th className="px-6 py-4 text-right">Fitness</th>
+                                                    <th className="px-10 py-5">Sonda</th>
+                                                    <th className="px-10 py-5">Lógica</th>
+                                                    <th className="px-10 py-5 text-emerald-400 text-right font-black">Fitness</th>
                                                 </tr>
                                             </thead>
-                                            <tbody className={`divide-y ${presentationMode ? 'divide-white/5' : 'divide-slate-50'}`}>
-                                                {drones.map(d => (
-                                                    <tr key={d.id} className={`${presentationMode ? 'hover:bg-white/5' : 'hover:bg-slate-50'} transition-colors`}>
-                                                        <td className="px-6 py-3 flex items-center gap-3 font-black">
-                                                            <div className="w-4 h-4 rounded-full border-2 border-white shadow-sm" style={{ backgroundColor: d.color }}></div>
-                                                            D{d.id}
+                                            <tbody className={`divide-y ${presentationMode ? 'divide-white/5' : 'divide-slate-100'}`}>
+                                                {particles.map(p => (
+                                                    <tr key={p.id} className={`${presentationMode ? 'hover:bg-white/5' : 'hover:bg-slate-50'} transition-colors font-black`}>
+                                                        <td className="px-10 py-4 flex items-center gap-5">
+                                                            <div className="w-8 h-8 rounded-full border-[3px] border-white shadow-sm" style={{ backgroundColor: p.color }}></div>
+                                                            S-{p.id}
                                                         </td>
-                                                        <td className="px-6 py-3">
-                                                            <span className={`px-2.5 py-1 rounded-lg text-[10px] font-black ${
-                                                                d.reason === 'Inercia' ? 'bg-blue-100 text-blue-700' :
-                                                                d.reason === 'Memoria' ? 'bg-emerald-100 text-emerald-700' :
-                                                                d.reason === 'Social' ? 'bg-purple-100 text-purple-700' : 'bg-slate-100 text-slate-500'
+                                                        <td className="px-10 py-4">
+                                                            <span className={`px-4 py-1 rounded-xl text-xs font-black border ${
+                                                                p.reason === 'Inercia' ? 'bg-blue-500/10 border-blue-500 text-blue-500' :
+                                                                p.reason === 'Memoria' ? 'bg-emerald-500/10 border-emerald-500 text-emerald-500' :
+                                                                'bg-purple-500/10 border-purple-500 text-purple-500'
                                                             }`}>
-                                                                {d.reason.toUpperCase()}
+                                                                {p.reason.toUpperCase()}
                                                             </span>
                                                         </td>
-                                                        <td className="px-6 py-3 opacity-100 italic">{d.pBestX.toFixed(0)},{d.pBestY.toFixed(0)}</td>
-                                                        <td className={`px-6 py-3 text-sm ${presentationMode ? 'text-blue-300' : 'text-blue-700'}`}>
-                                                            → {d.nextX.toFixed(0)},{d.nextY.toFixed(0)}
+                                                        <td className="px-10 py-4 text-right text-4xl text-emerald-400 font-black">
+                                                            {p.pBestFitness.toFixed(0)}
                                                         </td>
-                                                        <td className="px-6 py-3 text-right text-base">{d.pBestFitness.toFixed(1)}</td>
                                                     </tr>
                                                 ))}
                                             </tbody>
                                         </table>
                                     </div>
                                 </div>
-
                             </div>
                         </div>
                     </div>
