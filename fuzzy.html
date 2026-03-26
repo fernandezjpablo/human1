@@ -1,0 +1,545 @@
+
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Simulador de Lógica Borrosa - Control Inteligente</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <style>
+        body { background-color: #0f172a; color: #f8fafc; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; overflow-x: hidden; }
+        .canvas-container { position: relative; width: 100%; height: 150px; background-color: #1e293b; border-radius: 0.5rem; overflow: hidden; box-shadow: inset 0 0 10px rgba(0,0,0,0.5); }
+        .canvas-container-sm { height: 100px; }
+        canvas { display: block; width: 100%; height: 100%; }
+        
+        /* Animaciones y UI */
+        .fan-blade { transform-origin: center center; animation: spin linear infinite; }
+        @keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
+        
+        .tab-btn.active { border-bottom: 2px solid #22d3ee; color: #22d3ee; background-color: rgba(34, 211, 238, 0.1); }
+        .rule-cell { transition: all 0.2s ease; }
+        .rule-active { border-color: #facc15 !important; box-shadow: 0 0 10px rgba(250, 204, 21, 0.2); background-color: rgba(250, 204, 21, 0.15); transform: scale(1.02); z-index: 10;}
+        
+        input[type=range] { -webkit-appearance: none; width: 100%; background: transparent; }
+        input[type=range]::-webkit-slider-thumb {
+            -webkit-appearance: none; height: 20px; width: 20px; border-radius: 50%; background: #38bdf8;
+            cursor: pointer; margin-top: -6px; box-shadow: 0 0 10px #38bdf8;
+        }
+        input[type=range]::-webkit-slider-runnable-track { width: 100%; height: 8px; cursor: pointer; background: #334155; border-radius: 4px; }
+        
+        /* Fuego del cohete */
+        .rocket-flame { transition: transform 0.1s ease-out; transform-origin: top center; }
+    </style>
+</head>
+<body class="p-4 md:p-6 h-screen flex flex-col">
+
+    <!-- Header & Tabs -->
+    <header class="mb-4 flex flex-col md:flex-row justify-between items-start md:items-center border-b border-slate-700 pb-4 gap-4">
+        <div>
+            <h1 class="text-2xl md:text-3xl font-bold text-transparent bg-clip-text bg-gradient-to-r from-cyan-400 to-blue-500">
+                <i class="fa-solid fa-microchip mr-2"></i> Motor de Inferencia Borroso
+            </h1>
+            <p class="text-slate-400 mt-1 text-sm md:text-base">Visualización en Tiempo Real de Sistemas de Control</p>
+        </div>
+        <div class="flex bg-slate-800 rounded-lg overflow-hidden border border-slate-600 shadow-lg">
+            <button onclick="switchTab('tab1')" id="btn-tab1" class="tab-btn active px-4 py-2 text-sm font-semibold transition-colors text-slate-300 hover:text-cyan-300">
+                <i class="fa-solid fa-fan mr-1"></i> Básico (3 Reglas)
+            </button>
+            <button onclick="switchTab('tab2')" id="btn-tab2" class="tab-btn px-4 py-2 text-sm font-semibold transition-colors border-l border-slate-600 text-slate-300 hover:text-cyan-300">
+                <i class="fa-solid fa-rocket mr-1"></i> Avanzado (25 Reglas)
+            </button>
+        </div>
+    </header>
+
+    <!-- ==================== TAB 1: BÁSICO (VENTILADOR) ==================== -->
+    <div id="tab1" class="flex-grow flex flex-col">
+        <!-- Main Control Slider -->
+        <div class="bg-slate-800 p-4 md:p-6 rounded-xl border border-slate-700 mb-6 shadow-lg shadow-cyan-900/20">
+            <div class="flex justify-between items-center mb-4">
+                <label for="tempSlider" class="block text-lg font-semibold text-cyan-300">Temperatura Actual:</label>
+                <div class="text-2xl font-bold text-white" id="tempDisplay">25.0 °C</div>
+            </div>
+            <input type="range" id="tempSlider" min="0" max="40" step="0.1" value="25" class="w-full">
+            <div class="flex justify-between text-slate-400 mt-2 text-xs md:text-sm font-bold">
+                <span>0 °C (Frío)</span>
+                <span>20 °C (Óptimo)</span>
+                <span>40 °C (Calor)</span>
+            </div>
+        </div>
+
+        <div class="grid grid-cols-1 md:grid-cols-3 gap-6 flex-grow">
+            <!-- Step 1: Fuzzification -->
+            <div class="bg-slate-800 p-4 rounded-xl border border-slate-700 flex flex-col shadow-lg">
+                <h2 class="text-lg font-bold mb-2 text-white border-b border-slate-600 pb-2">1. Fuzzificación (LHS)</h2>
+                <div class="canvas-container mb-3" id="c1-1"><canvas id="fuzzCanvas"></canvas></div>
+                <div id="fuzzStats" class="text-sm space-y-1 font-mono bg-slate-900 p-2 rounded border border-slate-700"></div>
+            </div>
+
+            <!-- Step 2: Inference -->
+            <div class="bg-slate-800 p-4 rounded-xl border border-slate-700 flex flex-col shadow-lg">
+                <h2 class="text-lg font-bold mb-2 text-white border-b border-slate-600 pb-2">2. Inferencia (Reglas)</h2>
+                <div class="canvas-container mb-3" id="c1-2"><canvas id="inferenceCanvas"></canvas></div>
+                <div class="text-xs space-y-2 font-mono bg-slate-900 p-2 rounded border border-slate-700 text-slate-300">
+                    <div id="r1-basic" class="transition-colors">R1: SI Fría &rarr; Pot. Baja</div>
+                    <div id="r2-basic" class="transition-colors">R2: SI Templada &rarr; Pot. Media</div>
+                    <div id="r3-basic" class="transition-colors">R3: SI Caliente &rarr; Pot. Alta</div>
+                </div>
+            </div>
+
+            <!-- Step 3: Defuzzification & Result -->
+            <div class="bg-slate-800 p-4 rounded-xl border border-slate-700 flex flex-col shadow-lg">
+                <h2 class="text-lg font-bold mb-2 text-white border-b border-slate-600 pb-2">3. Defusificación (RHS)</h2>
+                <div class="canvas-container mb-2" id="c1-3"><canvas id="defuzzCanvas"></canvas></div>
+                
+                <div class="text-[11px] font-mono bg-slate-900 p-1 rounded border border-slate-700 mb-2 text-slate-300">
+                    <div class="flex justify-center items-center">
+                        <span class="mr-2 text-cyan-400 font-bold">z* =</span>
+                        <div class="flex flex-col items-center leading-none"><span class="border-b border-slate-500 px-2 pb-1 text-slate-400">∑(z·μ)</span><span class="px-2 pt-1 text-slate-400">∑μ</span></div>
+                        <span class="mx-2">=</span>
+                        <div class="flex flex-col items-center leading-none"><span class="border-b border-slate-500 px-2 pb-1" id="sumZMu">0.0</span><span class="px-2 pt-1" id="sumMu">0.0</span></div>
+                        <span class="ml-2">= <span id="mathResult" class="text-yellow-400 font-bold text-sm">0.0</span>%</span>
+                    </div>
+                </div>
+
+                <div class="flex items-center justify-between bg-slate-900 p-3 rounded border border-slate-700 mt-auto">
+                    <div>
+                        <div class="text-xs text-slate-400 uppercase tracking-wider">Potencia Final</div>
+                        <div class="text-3xl font-bold text-yellow-400" id="powerDisplay">0.0%</div>
+                    </div>
+                    <div class="w-14 h-14 bg-slate-800 rounded-full flex items-center justify-center border-2 border-slate-600 shadow-[0_0_15px_rgba(0,0,0,0.5)]">
+                        <svg viewBox="0 0 100 100" class="w-10 h-10 text-slate-300 fan-blade" id="fanIcon">
+                            <circle cx="50" cy="50" r="10" fill="currentColor"/><path d="M50 40 C 30 10, 70 10, 50 40" fill="currentColor"/><path d="M50 60 C 30 90, 70 90, 50 60" fill="currentColor"/><path d="M40 50 C 10 30, 10 70, 40 50" fill="currentColor"/><path d="M60 50 C 90 30, 90 70, 60 50" fill="currentColor"/>
+                        </svg>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- ==================== TAB 2: AVANZADO (SPACEX) ==================== -->
+    <div id="tab2" class="hidden flex-grow flex flex-col">
+        <!-- Dual Sliders -->
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-4 md:gap-6 bg-slate-800 p-4 md:p-6 rounded-xl border border-slate-700 mb-4 shadow-lg">
+            <div>
+                <div class="flex justify-between items-center mb-2">
+                    <label class="block text-sm md:text-base font-semibold text-cyan-300">Altitud (m):</label>
+                    <div class="text-xl font-bold text-white" id="altDisplay">500 m</div>
+                </div>
+                <input type="range" id="altSlider" min="0" max="1000" step="1" value="300" class="w-full">
+                <div class="flex justify-between text-slate-400 mt-1 text-[10px] font-bold"><span>0m (Suelo)</span><span>1000m (Espacio)</span></div>
+            </div>
+            <div>
+                <div class="flex justify-between items-center mb-2">
+                    <label class="block text-sm md:text-base font-semibold text-pink-300">Vel. de Caída (m/s):</label>
+                    <div class="text-xl font-bold text-white" id="velDisplay">-40 m/s</div>
+                </div>
+                <input type="range" id="velSlider" min="-150" max="50" step="1" value="-60" class="w-full">
+                <div class="flex justify-between text-slate-400 mt-1 text-[10px] font-bold"><span>-150m/s (Letal)</span><span>+50m/s (Subiendo)</span></div>
+            </div>
+        </div>
+
+        <div class="grid grid-cols-1 lg:grid-cols-3 gap-6 flex-grow">
+            <!-- Step 1: 2x Fuzzification -->
+            <div class="bg-slate-800 p-4 rounded-xl border border-slate-700 flex flex-col space-y-3 shadow-lg">
+                <h2 class="text-lg font-bold text-white border-b border-slate-600 pb-1">1. Fuzzificación (5x5 Conjuntos)</h2>
+                <div class="flex-grow flex flex-col justify-around">
+                    <div>
+                        <div class="text-xs font-bold text-cyan-300 mb-1">μ (Altitud) = {Suelo, Baja, Media, Alta, Espacio}</div>
+                        <div class="canvas-container-sm relative bg-slate-900 rounded border border-slate-700 shadow-inner" id="c2-1"><canvas id="fuzzAltCanvas"></canvas></div>
+                    </div>
+                    <div class="mt-2">
+                        <div class="text-xs font-bold text-pink-300 mb-1">μ (Velocidad) = {Letal, Rápida, Control., Flotando, Sube}</div>
+                        <div class="canvas-container-sm relative bg-slate-900 rounded border border-slate-700 shadow-inner" id="c2-2"><canvas id="fuzzVelCanvas"></canvas></div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Step 2: 5x5 Inference Matrix -->
+            <div class="bg-slate-800 p-4 rounded-xl border border-slate-700 flex flex-col shadow-lg">
+                <h2 class="text-lg font-bold text-white border-b border-slate-600 pb-1 mb-2">2. Inferencia: 25 Reglas (Operador MIN)</h2>
+                <!-- Aquí se inyectará la matriz 5x5 generada por JS -->
+                <div id="matrix-container" class="grid grid-cols-5 gap-1 flex-grow h-full text-[8px] sm:text-[10px]">
+                </div>
+            </div>
+
+            <!-- Step 3: Defuzzification (7 Sets) -->
+            <div class="bg-slate-800 p-4 rounded-xl border border-slate-700 flex flex-col shadow-lg">
+                <h2 class="text-lg font-bold text-white border-b border-slate-600 pb-1 mb-2">3. Fusión y Centroide (z*)</h2>
+                <div class="canvas-container mb-2 h-[120px]" id="c2-3"><canvas id="defuzzSpaceXCanvas"></canvas></div>
+                
+                <!-- Formula Centroide Avanzado -->
+                <div class="text-[11px] font-mono bg-slate-900 p-2 rounded border border-slate-700 mb-2 text-slate-300 shadow-inner">
+                    <div class="flex justify-center items-center">
+                        <span class="mr-2 text-cyan-400 font-bold text-sm">z* =</span>
+                        <div class="flex flex-col items-center leading-none"><span class="border-b border-slate-500 px-2 pb-1 text-slate-400">∑(z·μ)</span><span class="px-2 pt-1 text-slate-400">∑μ</span></div>
+                        <span class="mx-2">=</span>
+                        <div class="flex flex-col items-center leading-none"><span class="border-b border-slate-500 px-2 pb-1" id="sumZMu2">0.0</span><span class="px-2 pt-1" id="sumMu2">0.0</span></div>
+                        <span class="ml-2 text-sm">= <span id="mathResult2" class="text-yellow-400 font-bold text-base">0.0</span>%</span>
+                    </div>
+                </div>
+
+                <div class="flex items-center justify-between bg-slate-900 p-3 rounded border border-slate-700 mt-auto shadow-inner">
+                    <div class="flex flex-col">
+                        <div class="text-[10px] sm:text-xs text-slate-400 uppercase tracking-wider">Empuje / Thrust</div>
+                        <div class="text-3xl font-bold text-yellow-400" id="thrustDisplay">0.0%</div>
+                    </div>
+                    
+                    <!-- SVG Rocket -->
+                    <div class="w-16 h-20 bg-slate-800 rounded flex flex-col items-center justify-end border border-slate-600 pt-2 pb-1 overflow-hidden shadow-[0_0_10px_rgba(0,0,0,0.4)]">
+                        <svg viewBox="0 0 24 24" class="w-8 h-8 text-white z-10 relative">
+                            <path fill="currentColor" d="M12 2.5s-4 4-4 10c0 4 2 5.5 2 7.5h4c0-2 2-3.5 2-7.5 0-6-4-10-4-10zm0 13c-1.1 0-2-.9-2-2s.9-2 2-2 2 .9 2 2-.9 2-2 2z"/>
+                        </svg>
+                        <!-- Flame -->
+                        <div class="w-4 flex justify-center -mt-1 z-0">
+                            <svg viewBox="0 0 24 24" class="w-6 text-orange-500 rocket-flame" id="rocketFlame">
+                                <path fill="currentColor" d="M12 22s-4-5.5-4-9c0-2.2 1.8-4 4-4s4 1.8 4 4c0 3.5-4 9-4 9z"/>
+                            </svg>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // --- FUNCIONES MATEMÁTICAS ---
+        function trimf(x, a, b, c) {
+            if (x <= a || x >= c) return 0;
+            if (x === b) return 1;
+            if (x < b) return (x - a) / (b - a);
+            return (c - x) / (c - b);
+        }
+
+        // ================= TAB 1: LÓGICA (Básica) =================
+        const t1_min = 0, t1_max = 40, p1_min = 0, p1_max = 100;
+        const setsT1 = {
+            fria: (x) => trimf(x, -20, 0, 20),
+            templada: (x) => trimf(x, 10, 20, 30),
+            caliente: (x) => trimf(x, 20, 40, 60)
+        };
+        const setsP1 = {
+            baja: (x) => trimf(x, -50, 0, 50),
+            media: (x) => trimf(x, 25, 50, 75),
+            alta: (x) => trimf(x, 50, 100, 150)
+        };
+        const colors = { c1: '#06b6d4', c2: '#22c55e', c3: '#ef4444' };
+
+        // ================= TAB 2: LÓGICA (Avanzada 5x5) =================
+        const alt_min = 0, alt_max = 1000;
+        const vel_min = -150, vel_max = 50;
+        
+        // 5 Conjuntos para Altitud
+        const setsAlt = {
+            suelo:   (x) => trimf(x, -100, 0, 200),
+            baja:    (x) => trimf(x, 100, 250, 400),
+            media:   (x) => trimf(x, 300, 500, 700),
+            alta:    (x) => trimf(x, 600, 750, 900),
+            espacio: (x) => trimf(x, 800, 1000, 1200)
+        };
+        const altLabels = ['Suelo', 'Baja', 'Media', 'Alta', 'Espacio'];
+
+        // 5 Conjuntos para Velocidad
+        const setsVel = {
+            letal:      (x) => trimf(x, -200, -150, -80),
+            rapida:     (x) => trimf(x, -100, -60, -20),
+            controlada: (x) => trimf(x, -40, -15, 0),
+            flotando:   (x) => trimf(x, -5, 0, 5),
+            subiendo:   (x) => trimf(x, 0, 25, 50)
+        };
+        const velLabels = ['Letal', 'Rápida', 'Control.', 'Flot.', 'Sube'];
+
+        // 7 Conjuntos de Potencia de Salida (0 a 100)
+        const OUT_APAGADO = 0, OUT_MBAJO = 1, OUT_BAJO = 2, OUT_MEDIO = 3, OUT_ALTO = 4, OUT_MALTO = 5, OUT_MAX = 6;
+        const setsThrust = [
+            (x) => trimf(x, -10, 0, 15),     // Apagado
+            (x) => trimf(x, 5, 20, 35),      // Muy Bajo
+            (x) => trimf(x, 25, 40, 55),     // Bajo
+            (x) => trimf(x, 40, 50, 60),     // Medio
+            (x) => trimf(x, 50, 65, 80),     // Alto
+            (x) => trimf(x, 70, 85, 100),    // Muy Alto
+            (x) => trimf(x, 90, 100, 110)    // Máximo
+        ];
+        const outLabels = ['APAG', 'M.BAJ', 'BAJO', 'MED', 'ALTO', 'M.ALT', 'MAX'];
+        const outColors = ['#94a3b8', '#38bdf8', '#34d399', '#facc15', '#f97316', '#ef4444', '#b91c1c']; // Colores de intensidad
+
+        // MATRIZ DE REGLAS (5x5) -> Mapea (Altitud, Velocidad) a índice de output
+        // Filas: Suelo(0), Baja(1), Media(2), Alta(3), Espacio(4)
+        // Columnas: Letal(0), Rápida(1), Controlada(2), Flotando(3), Subiendo(4)
+        const ruleMatrix = [
+            [OUT_MAX,   OUT_MAX,   OUT_ALTO,  OUT_MEDIO, OUT_APAGADO], // 0: Suelo
+            [OUT_MAX,   OUT_ALTO,  OUT_MEDIO, OUT_BAJO,  OUT_APAGADO], // 1: Baja
+            [OUT_MALTO, OUT_MEDIO, OUT_MEDIO, OUT_MBAJO, OUT_APAGADO], // 2: Media
+            [OUT_ALTO,  OUT_MEDIO, OUT_BAJO,  OUT_APAGADO, OUT_APAGADO], // 3: Alta
+            [OUT_MEDIO, OUT_BAJO,  OUT_APAGADO, OUT_APAGADO, OUT_APAGADO]  // 4: Espacio
+        ];
+        const t2ColsAlt = ['#f87171', '#fb923c', '#facc15', '#4ade80', '#38bdf8'];
+        const t2ColsVel = ['#b91c1c', '#ef4444', '#facc15', '#a3e635', '#38bdf8'];
+
+        // --- SISTEMA DE CANVAS Y DIBUJO ---
+        let ctx = {};
+        function setupCanvases() {
+            const ids = ['fuzzCanvas', 'inferenceCanvas', 'defuzzCanvas', 'fuzzAltCanvas', 'fuzzVelCanvas', 'defuzzSpaceXCanvas'];
+            ids.forEach(id => {
+                const c = document.getElementById(id);
+                const p = c.parentElement;
+                c.width = p.clientWidth;
+                c.height = p.clientHeight;
+                ctx[id] = c.getContext('2d');
+            });
+        }
+
+        function drawGrid(cx, w, h) {
+            cx.clearRect(0, 0, w, h);
+            cx.strokeStyle = 'rgba(255,255,255,0.05)';
+            cx.lineWidth = 1;
+            cx.beginPath();
+            for(let i=0; i<=4; i++) { let x = (i/4)*w; cx.moveTo(x,0); cx.lineTo(x,h); }
+            cx.moveTo(0,h); cx.lineTo(w,h); cx.moveTo(0,h/2); cx.lineTo(w,h/2);
+            cx.stroke();
+        }
+
+        function drawShape(cx, w, h, func, minX, maxX, color, clip = 1, fill = false) {
+            cx.beginPath(); cx.moveTo(0, h);
+            for(let px=0; px<=w; px+=2) {
+                let y = Math.min(func(minX + (px/w)*(maxX-minX)), clip);
+                cx.lineTo(px, h - (y * h * 0.85)); 
+            }
+            cx.lineTo(w, h);
+            if (fill) { cx.fillStyle = color+'40'; cx.fill(); }
+            cx.strokeStyle = color; cx.lineWidth = 2; cx.stroke();
+        }
+
+        function drawMarker(cx, w, h, val, minX, maxX, mu, color) {
+            const px = ((val - minX) / (maxX - minX)) * w;
+            cx.strokeStyle = 'rgba(255,255,255,0.5)'; cx.setLineDash([3, 3]);
+            cx.beginPath(); cx.moveTo(px, 0); cx.lineTo(px, h); cx.stroke(); cx.setLineDash([]);
+            if (mu > 0) {
+                cx.beginPath(); cx.arc(px, h - (mu * h * 0.85), 3, 0, Math.PI*2);
+                cx.fillStyle = color; cx.fill(); cx.strokeStyle = '#fff'; cx.lineWidth=1; cx.stroke();
+            }
+        }
+
+        // ================= CONSTRUIR MATRIZ 25 REGLAS EN DOM =================
+        function buildRulesMatrix() {
+            let html = '';
+            for(let a=0; a<5; a++) {
+                for(let v=0; v<5; v++) {
+                    let outIdx = ruleMatrix[a][v];
+                    let label = outLabels[outIdx];
+                    let col = outColors[outIdx];
+                    html += `
+                        <div id="r2-${a}-${v}" class="rule-cell border border-slate-700 rounded flex flex-col justify-center items-center bg-slate-900 overflow-hidden">
+                            <div class="text-slate-500 text-[8px] md:text-[9px] mb-[2px] leading-tight text-center w-full truncate px-1">${altLabels[a].substring(0,3)} + ${velLabels[v].substring(0,4)}</div>
+                            <div class="font-bold text-[9px] md:text-[11px]" style="color:${col}">${label}</div>
+                            <div class="mt-auto w-full bg-slate-950 text-center py-[2px] text-slate-500 font-mono mu-val">μ=0.00</div>
+                        </div>
+                    `;
+                }
+            }
+            document.getElementById('matrix-container').innerHTML = html;
+        }
+
+        // ================= ACTUALIZAR TAB 1 =================
+        function updateTab1() {
+            if(document.getElementById('tab1').classList.contains('hidden')) return;
+            const temp = parseFloat(document.getElementById('tempSlider').value);
+            document.getElementById('tempDisplay').innerText = temp.toFixed(1) + " °C";
+            
+            const m1 = setsT1.fria(temp), m2 = setsT1.templada(temp), m3 = setsT1.caliente(temp);
+            document.getElementById('fuzzStats').innerHTML = `<div style="color:${colors.c1}">μ(Fría) = ${m1.toFixed(2)}</div><div style="color:${colors.c2}">μ(Templada) = ${m2.toFixed(2)}</div><div style="color:${colors.c3}">μ(Caliente) = ${m3.toFixed(2)}</div>`;
+            
+            let c = ctx['fuzzCanvas']; let w = c.canvas.width, h = c.canvas.height;
+            drawGrid(c, w, h);
+            drawShape(c, w, h, setsT1.fria, t1_min, t1_max, colors.c1); drawMarker(c, w, h, temp, t1_min, t1_max, m1, colors.c1);
+            drawShape(c, w, h, setsT1.templada, t1_min, t1_max, colors.c2); drawMarker(c, w, h, temp, t1_min, t1_max, m2, colors.c2);
+            drawShape(c, w, h, setsT1.caliente, t1_min, t1_max, colors.c3); drawMarker(c, w, h, temp, t1_min, t1_max, m3, colors.c3);
+
+            c = ctx['inferenceCanvas']; w = c.canvas.width; h = c.canvas.height;
+            drawGrid(c, w, h);
+            drawShape(c, w, h, setsP1.baja, p1_min, p1_max, colors.c1, m1, true);
+            drawShape(c, w, h, setsP1.media, p1_min, p1_max, colors.c2, m2, true);
+            drawShape(c, w, h, setsP1.alta, p1_min, p1_max, colors.c3, m3, true);
+
+            document.getElementById('r1-basic').style.color = m1 > 0 ? colors.c1 : '#475569';
+            document.getElementById('r2-basic').style.color = m2 > 0 ? colors.c2 : '#475569';
+            document.getElementById('r3-basic').style.color = m3 > 0 ? colors.c3 : '#475569';
+
+            c = ctx['defuzzCanvas']; w = c.canvas.width; h = c.canvas.height;
+            drawGrid(c, w, h);
+            c.beginPath(); c.moveTo(0, h);
+            let sumZ = 0, sumMu = 0;
+            for(let px=0; px<=w; px+=1) {
+                let z = p1_min + (px/w)*(p1_max-p1_min);
+                let y = Math.max(Math.min(m1, setsP1.baja(z)), Math.min(m2, setsP1.media(z)), Math.min(m3, setsP1.alta(z)));
+                sumZ += z*y; sumMu += y;
+                c.lineTo(px, h - (y * h * 0.85));
+            }
+            c.lineTo(w, h);
+            let grad = c.createLinearGradient(0,0,w,0); grad.addColorStop(0, colors.c1+'80'); grad.addColorStop(0.5, colors.c2+'80'); grad.addColorStop(1, colors.c3+'80');
+            c.fillStyle = grad; c.fill(); c.strokeStyle='#facc15'; c.lineWidth=2; c.stroke();
+
+            let zStar = sumMu === 0 ? 0 : sumZ / sumMu;
+            document.getElementById('sumZMu').innerText = sumZ.toFixed(1);
+            document.getElementById('sumMu').innerText = sumMu.toFixed(2);
+            document.getElementById('mathResult').innerText = zStar.toFixed(1);
+            document.getElementById('powerDisplay').innerText = zStar.toFixed(1) + "%";
+            document.getElementById('fanIcon').style.animationDuration = zStar<1 ? '0s' : (3 - (zStar/100)*2.9) + 's';
+
+            if(sumMu>0){
+                let px = (zStar/p1_max)*w;
+                c.strokeStyle='#facc15'; c.lineWidth=2; c.beginPath(); c.moveTo(px,0); c.lineTo(px,h); c.stroke();
+            }
+        }
+
+        // ================= ACTUALIZAR TAB 2 (Avanzado) =================
+        function updateTab2() {
+            if(document.getElementById('tab2').classList.contains('hidden')) return;
+            const alt = parseFloat(document.getElementById('altSlider').value);
+            const vel = parseFloat(document.getElementById('velSlider').value);
+            document.getElementById('altDisplay').innerText = alt.toFixed(0) + " m";
+            document.getElementById('velDisplay').innerText = vel.toFixed(0) + " m/s";
+
+            // Evaluaciones de pertenencia
+            const aMus = [setsAlt.suelo(alt), setsAlt.baja(alt), setsAlt.media(alt), setsAlt.alta(alt), setsAlt.espacio(alt)];
+            const vMus = [setsVel.letal(vel), setsVel.rapida(vel), setsVel.controlada(vel), setsVel.flotando(vel), setsVel.subiendo(vel)];
+
+            // Dibujar Fuzzificación Altitud
+            let c = ctx['fuzzAltCanvas']; let w = c.canvas.width, h = c.canvas.height;
+            drawGrid(c, w, h);
+            const altFuncs = [setsAlt.suelo, setsAlt.baja, setsAlt.media, setsAlt.alta, setsAlt.espacio];
+            for(let i=0; i<5; i++) {
+                drawShape(c, w, h, altFuncs[i], alt_min, alt_max, t2ColsAlt[i]);
+                drawMarker(c, w, h, alt, alt_min, alt_max, aMus[i], t2ColsAlt[i]);
+            }
+
+            // Dibujar Fuzzificación Velocidad
+            c = ctx['fuzzVelCanvas']; w = c.canvas.width; h = c.canvas.height;
+            drawGrid(c, w, h);
+            const velFuncs = [setsVel.letal, setsVel.rapida, setsVel.controlada, setsVel.flotando, setsVel.subiendo];
+            for(let i=0; i<5; i++) {
+                drawShape(c, w, h, velFuncs[i], vel_min, vel_max, t2ColsVel[i]);
+                drawMarker(c, w, h, vel, vel_min, vel_max, vMus[i], t2ColsVel[i]);
+            }
+
+            // Evaluar 25 Reglas y actualizar la UI Matrix
+            let maxMuPerOutput = [0,0,0,0,0,0,0]; // Máximo firing strength para cada conjunto de salida
+
+            for(let a=0; a<5; a++) {
+                for(let v=0; v<5; v++) {
+                    let muRule = Math.min(aMus[a], vMus[v]); // Operador AND (Min)
+                    let outIdx = ruleMatrix[a][v];
+                    
+                    // Acumulamos el máximo para cada tipo de salida (Operador OR)
+                    maxMuPerOutput[outIdx] = Math.max(maxMuPerOutput[outIdx], muRule);
+
+                    // Update DOM Cell
+                    let el = document.getElementById(`r2-${a}-${v}`);
+                    let muEl = el.querySelector('.mu-val');
+                    muEl.innerText = `μ=${muRule.toFixed(2)}`;
+                    
+                    if(muRule > 0) {
+                        el.classList.add('rule-active');
+                        muEl.style.color = '#facc15';
+                    } else {
+                        el.classList.remove('rule-active');
+                        muEl.style.color = '#64748b';
+                    }
+                }
+            }
+
+            // Defuzzificación SpaceX (Fusión de áreas y Centroide)
+            c = ctx['defuzzSpaceXCanvas']; w = c.canvas.width; h = c.canvas.height;
+            drawGrid(c, w, h);
+            c.beginPath(); c.moveTo(0, h);
+            
+            let sumZ = 0, sumMu = 0;
+            
+            // Recorrer el eje Z (0 a 100%)
+            for(let px=0; px<=w; px+=1) {
+                let z = (px/w) * 100;
+                let maxAgg = 0;
+                
+                // Calcular envolvente máxima con los 7 conjuntos
+                for(let i=0; i<7; i++) {
+                    if (maxMuPerOutput[i] > 0) {
+                        maxAgg = Math.max(maxAgg, Math.min(maxMuPerOutput[i], setsThrust[i](z)));
+                    }
+                }
+                
+                sumZ += z * maxAgg; 
+                sumMu += maxAgg;
+                c.lineTo(px, h - (maxAgg * h * 0.85));
+            }
+            c.lineTo(w, h);
+            
+            // Relleno espectacular para cohete
+            let grad = c.createLinearGradient(0,0,w,0); 
+            grad.addColorStop(0, '#94a3b880'); // Gris apagado
+            grad.addColorStop(0.5, '#facc1580'); // Amarillo medio
+            grad.addColorStop(1, '#b91c1c80'); // Rojo máximo
+            c.fillStyle = grad; c.fill(); 
+            c.strokeStyle='#eab308'; c.lineWidth=2; c.stroke();
+
+            // Cálculo final Z*
+            let zStar = sumMu === 0 ? 0 : sumZ / sumMu;
+            document.getElementById('thrustDisplay').innerText = zStar.toFixed(1) + "%";
+            
+            // UI Matemática
+            document.getElementById('sumZMu2').innerText = sumZ.toFixed(1);
+            document.getElementById('sumMu2').innerText = sumMu.toFixed(2);
+            document.getElementById('mathResult2').innerText = zStar.toFixed(1);
+            
+            // Fuego del cohete
+            const flame = document.getElementById('rocketFlame');
+            flame.style.transform = `scaleY(${zStar/100 * 3.0})`; // Escalar la llama
+            flame.style.color = zStar > 85 ? '#dc2626' : zStar > 40 ? '#f97316' : zStar > 0 ? '#facc15' : 'transparent';
+
+            // Dibujar la barra vertical del centroide
+            if(sumMu > 0){
+                let px = (zStar/100)*w;
+                c.strokeStyle='#fff'; c.lineWidth=2; c.setLineDash([4,4]); 
+                c.beginPath(); c.moveTo(px,0); c.lineTo(px,h); c.stroke(); c.setLineDash([]);
+                
+                // Pequeño marcador arriba
+                c.fillStyle = '#fff'; c.beginPath();
+                c.moveTo(px-5, 0); c.lineTo(px+5, 0); c.lineTo(px, 7); c.fill();
+            }
+        }
+
+        // ================= GESTIÓN GLOBAL =================
+        function switchTab(tabId) {
+            document.getElementById('tab1').classList.add('hidden');
+            document.getElementById('tab2').classList.add('hidden');
+            document.getElementById('btn-tab1').classList.remove('active');
+            document.getElementById('btn-tab2').classList.remove('active');
+            
+            document.getElementById(tabId).classList.remove('hidden');
+            document.getElementById('btn-' + tabId).classList.add('active');
+            
+            // Timeout para asegurar que el DOM dibuje las dimensiones antes de pintar el Canvas
+            setTimeout(() => {
+                setupCanvases();
+                if(tabId === 'tab1') updateTab1();
+                if(tabId === 'tab2') updateTab2();
+            }, 50);
+        }
+
+        // Listeners
+        document.getElementById('tempSlider').addEventListener('input', updateTab1);
+        document.getElementById('altSlider').addEventListener('input', updateTab2);
+        document.getElementById('velSlider').addEventListener('input', updateTab2);
+
+        window.onload = () => {
+            buildRulesMatrix();
+            setupCanvases();
+            updateTab1();
+        };
+        
+        window.addEventListener('resize', () => {
+            setupCanvases();
+            if(!document.getElementById('tab1').classList.contains('hidden')) updateTab1();
+            if(!document.getElementById('tab2').classList.contains('hidden')) updateTab2();
+        });
+    </script>
+</body>
+</html>
